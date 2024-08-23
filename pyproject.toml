@@ -26,6 +26,10 @@ unstructured = {extras = ["pdf"], version = "^0.15.1"}
 langchain-community = "^0.2.12"
 langchain-core = "^0.2.33"
 langchain-openai = "^0.1.22"
+requests = "^2.32.3"
+textblob = "^0.18.0.post0"
+google-api-python-client = "^2.142.0"
+google-auth = "^2.34.0"
 
 
 [build-system]
