@@ -116,12 +116,29 @@ app = FastAPI(
 def read_root():
     return {"message": "Welcome to the root endpoint!"}
 
-# Define the persona/behavior prompt
-persona_prompt = (
-    "You are a friendly and persuasive solar energy salesman working for Kay Soley. "
-    "Your goal is to engage in a natural conversation with the user while subtly gathering "
-    "their full name, email address, and any specific needs or questions they may have about solar energy and Kay Soley."
+# Define the two persona prompts
+initial_persona_prompt = (    
+"You are a friendly representative of Kay Soley, knowledgeable about solar energy. Your goal is to engage in a natural conversation, and answer based on the Solar Guide any questions the user may have. If a question cannot be asnwered by the content of the Solar Guide, answer following the industry's standards. Do not ask for personal information at this stage."
 )
+
+salesman_persona_prompt = (
+    "You are a friendly and persuasive solar energy salesman working for Kay Soley. Your goal is to engage in a natural conversation with the user,       subtly gather their full name, email address, and any specific needs or questions they may have about solar energy and Kay Soley with brief answers\n"
+    "Instructions:\n"
+    "- Begin by building rapport and expressing enthusiasm for helping the user learn about solar energy.\n"
+    "- Ask open-ended questions to understand the user's interest in solar energy and gently guide the conversation towards gathering their contact information.\n"
+    "- Offer relevant information about Kay Soley's solar energy solutions and how they can meet the user's needs.\n"
+    "- Use a polite and non-intrusive approach when asking for the user's full name and email address.\n"
+    "- Ensure the conversation feels natural and the user feels comfortable providing their information.\n\n"
+    "Desired Format:\n"
+    "- Gather the following information from the user:\n"
+    "  - Full Name: <extracted full name if any>\n"
+    "  - Email: <extracted email address if any>\n"
+    "  - Notes: <Brief summary of the conversation and user's needs or questions>"
+)
+
+# Dictionaries to track user state
+exchange_count = {}
+info_collected = {}
 
 def analyze_input_for_information(input_text):
     """Analyzes the user's input to check for personal information."""
@@ -181,10 +198,19 @@ async def chat(request: Request):
 
     logger.info(f"Query received: {input_text}")
 
+    # Get user ID to track exchange count (for demo purposes, using a placeholder user_id)
+    user_id = "user_demo"  # Replace this with actual user ID tracking logic if needed
+    exchange_count[user_id] = exchange_count.get(user_id, 0) + 1
+    info_collected[user_id] = info_collected.get(user_id, False)
+
     try:
-        # Initial GPT response for the conversation
-        conversation_active = True
-        collected_info = {"fullname": "N/A", "email": "N/A", "notes": "N/A"}
+        # Determine which persona prompt to use based on the exchange count and whether info has been collected
+        if info_collected[user_id]:
+            persona_prompt = initial_persona_prompt
+        elif exchange_count[user_id] < 3:
+            persona_prompt = initial_persona_prompt
+        else:
+            persona_prompt = salesman_persona_prompt
 
         # Retrieve relevant knowledge from the vectorstore
         context = retriever.get_relevant_documents(input_text)
@@ -197,32 +223,29 @@ async def chat(request: Request):
         conversation_response = llm.invoke(question_with_context)
         logger.info(f"LLM response for conversation: {conversation_response.content}")
 
-        # Analyze user input for personal information and negativity
-        fullname, email, notes, detect = analyze_input_for_information(input_text)
+        # If this is the third exchange or later, analyze user input for personal information and negativity
+        if exchange_count[user_id] >= 3 and not info_collected[user_id]:
+            fullname, email, notes, detect = analyze_input_for_information(input_text)
 
-        if detect:
-            collected_info["fullname"] = fullname
-            collected_info["email"] = email
-            collected_info["notes"] = notes
-            logger.info(f"Extracted Information - Full Name: {fullname}, Email: {email}, Notes: {notes}")
+            if detect:
+                collected_info = {"fullname": fullname, "email": email, "notes": notes}
+                logger.info(f"Extracted Information - Full Name: {fullname}, Email: {email}, Notes: {notes}")
 
-            # If all information is collected and valid, send it to Google Sheets
-            if all(value != "N/A" for value in collected_info.values()):
-                logger.info("All required information collected and valid. Sending to Google Sheets...")
-                if send_to_google_sheet(collected_info["fullname"],
-                                        collected_info["email"],
-                                        collected_info["notes"]):
-                    conversation_active = False
-                    return {
-                        "answer": 
-                        "Thank you! Your information has been collected successfully. We'll be in touch soon."
-                    }
-                else:
-                    logger.error("Failed to send information to Google Sheets.")
-                    return {"answer": conversation_response.content}
-
-        else:
-            logger.info("Detected negative or invalid information. Continuing conversation...")
+                # If all information is collected and valid, send it to Google Sheets
+                if all(value != "N/A" for value in collected_info.values()):
+                    logger.info("All required information collected and valid. Sending to Google Sheets...")
+                    if send_to_google_sheet(collected_info["fullname"],
+                                            collected_info["email"],
+                                            collected_info["notes"]):
+                        # Mark information as collected and reset to initial persona prompt
+                        info_collected[user_id] = True
+                        return {
+                            "answer": 
+                            "Thank you! Your information has been collected successfully. We'll be in touch soon."
+                        }
+                    else:
+                        logger.error("Failed to send information to Google Sheets.")
+                        return {"answer": conversation_response.content}
 
         # If not all information is collected, send the first GPT response directly to Voiceflow
         return {"answer": conversation_response.content}
