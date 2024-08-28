@@ -11,13 +11,15 @@ import logging
 from textblob import TextBlob  # Import for sentiment analysis
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
+from langchain.chains.conversation.memory import ConversationBufferMemory
+from langchain.chains import ConversationChain
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Set up the language model (using GPT-3.5-turbo)
-llm = ChatOpenAI(model="gpt-3.5-turbo", temperature=0.7)
+llm = ChatOpenAI(model="gpt-4-turbo", temperature=0)
 
 # Google Sheets credentials - replace with your actual values
 GOOGLE_SHEET_ID = "10oAG2URrrX1YJr0StNAXszFycYPwBMmj9N6Y18TwcVk"  # Your Google Sheet ID
@@ -103,6 +105,16 @@ vectorstore = FAISS.load_local("faiss_vector_db",
                                OpenAIEmbeddings(),
                                allow_dangerous_deserialization=True)
 retriever = vectorstore.as_retriever()
+
+# Initialize Conversation Buffer Memory
+conversation_memory = ConversationBufferMemory()
+
+# Initialize the Conversation Chain with memory
+conversation_chain = ConversationChain(
+    llm=llm,
+    memory=conversation_memory,
+)
+
 
 # Initialize FastAPI application
 app = FastAPI(
@@ -215,13 +227,12 @@ async def chat(request: Request):
         # Retrieve relevant knowledge from the vectorstore
         context = retriever.get_relevant_documents(input_text)
         context_text = "\n\n".join([doc.page_content for doc in context])
-
         # Combine the persona prompt, context, and user query
         question_with_context = f"{persona_prompt}\n\nContext:\n{context_text}\n\nQuestion: {input_text}"
 
-        # Get the response from the LLM for the conversation
-        conversation_response = llm.invoke(question_with_context)
-        logger.info(f"LLM response for conversation: {conversation_response.content}")
+        # Get the response from the LLM using the conversation chain
+        conversation_response = conversation_chain.run(question_with_context)
+        logger.info(f"LLM response for conversation: {conversation_response}")
 
         # If this is the third exchange or later, analyze user input for personal information and negativity
         if exchange_count[user_id] >= 3 and not info_collected[user_id]:
@@ -245,10 +256,11 @@ async def chat(request: Request):
                         }
                     else:
                         logger.error("Failed to send information to Google Sheets.")
-                        return {"answer": conversation_response.content}
+                        return {"answer": conversation_response}
 
         # If not all information is collected, send the first GPT response directly to Voiceflow
-        return {"answer": conversation_response.content}
+        return {"answer": conversation_response}
+
 
     except Exception as e:
         logger.error(f"Error during chat invocation: {e}")
