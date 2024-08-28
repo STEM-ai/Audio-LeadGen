@@ -1,4 +1,5 @@
 import os
+import hashlib
 from fastapi import FastAPI, Request
 import uvicorn
 from langchain_openai import ChatOpenAI
@@ -81,29 +82,58 @@ def send_to_google_sheet(fullname, email, notes):
         logger.error(f"Exception occurred while sending data to Google Sheets: {e}")
         return False
 
+
+# File paths and constants
+DOCUMENT_PATH = "docs/Solar_guide.pdf"
+HASH_FILE = "document_hash.txt"
+VECTOR_STORE_PATH = "faiss_vector_db"
+
+# Function to calculate the hash of the document
+def calculate_file_hash(filepath):
+    hash_algo = hashlib.sha256()
+    with open(filepath, 'rb') as file:
+        while chunk := file.read(8192):
+            hash_algo.update(chunk)
+    return hash_algo.hexdigest()
+
+# Function to check if the document has changed
+def document_changed():
+    new_hash = calculate_file_hash(DOCUMENT_PATH)
+
+    if os.path.exists(HASH_FILE):
+        with open(HASH_FILE, 'r') as f:
+            old_hash = f.read()
+
+        if new_hash == old_hash:
+            return False  # Document hasn't changed
+
+    # Document has changed or HASH_FILE doesn't exist
+    with open(HASH_FILE, 'w') as f:
+        f.write(new_hash)
+
+    return True
+
 # Function to load and ingest documents
 def ingest_docs():
     logger.info("Starting document ingestion process.")
-    loader = UnstructuredPDFLoader("docs/Solar_guide.pdf")
+    loader = UnstructuredPDFLoader(DOCUMENT_PATH)
     docs = loader.load()
-    text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000,
-                                                   chunk_overlap=200)
+    text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
     chunks = text_splitter.split_documents(docs)
 
-    vectorstore = FAISS.from_documents(documents=chunks,
-                                       embedding=OpenAIEmbeddings())
-    vectorstore.save_local("faiss_vector_db")
+    vectorstore = FAISS.from_documents(documents=chunks, embedding=OpenAIEmbeddings())
+    vectorstore.save_local(VECTOR_STORE_PATH)
     logger.info("Document successfully ingested into knowledge base")
     print("Document successfully ingested into knowledge base")
 
-if not os.path.isdir("faiss_vector_db"):
-    logger.info("Vector database not found. Ingesting documents...")
-    print("Vector database not found. Ingesting documents...")
+# Check if document has changed and ingest if needed
+if document_changed():
+    logger.info("Document changed. Ingesting new document...")
     ingest_docs()
+else:
+    logger.info("Document unchanged. Loading existing vector store.")
 
-vectorstore = FAISS.load_local("faiss_vector_db",
-                               OpenAIEmbeddings(),
-                               allow_dangerous_deserialization=True)
+vectorstore = FAISS.load_local(VECTOR_STORE_PATH, OpenAIEmbeddings(), allow_dangerous_deserialization=True)
 retriever = vectorstore.as_retriever()
 
 # Initialize Conversation Buffer Memory
