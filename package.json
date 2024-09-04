@@ -1,0 +1,25 @@
+{
+  "name": "nodejs-typescript",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.ts",
+  "type": "module",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@hono/node-server": "^1.12.2",
+    "googleapis": "^144.0.0",
+    "hono": "^4.5.11",
+    "node-fetch": "^3.3.1",
+    "openai": "^4.57.1",
+    "sentiment": "^5.0.2",
+    "twilio": "^5.2.3"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "tsx": "^4.7.1"
+  }
+}
