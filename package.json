@@ -11,12 +11,16 @@
   "license": "ISC",
   "dependencies": {
     "@hono/node-server": "^1.12.2",
+    "@types/axios": "^0.14.0",
+    "axios": "^1.7.7",
     "googleapis": "^144.0.0",
     "hono": "^4.5.11",
     "node-fetch": "^3.3.1",
-    "openai": "^4.57.1",
+    "openai": "^4.58.0",
     "sentiment": "^5.0.2",
-    "twilio": "^5.2.3"
+    "serve-static": "^1.15.0",
+    "twilio": "^5.2.3",
+    "ws": "^8.18.0"
   },
   "devDependencies": {
     "@types/node": "^20.10.0",
