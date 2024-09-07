@@ -205,20 +205,35 @@ const getPersonaPrompt = (exchangeCount: number): string => {
 };
 
 // Function to handle Twilio incoming call with custom Eleven Labs voice
-app.post('/incoming-call', (c) => {
-  console.log('Received a POST request on /incoming-call');
-  const voiceResponse = new twilio.twiml.VoiceResponse();
-  voiceResponse.say('Hello, how are you');
-  voiceResponse.gather({
-    input: ["speech"],
-    speechTimeout: "5", // "auto"
-    speechModel: "phone_call",
-    enhanced: true,
-    action: '/respond',
-  });
-  c.header('Content-Type', 'application/xml');
-  return c.body(voiceResponse.toString());
+app.post('/incoming-call', async (c) => {  // Ensure this function is async
+  try {
+    console.log('Received a POST request on /incoming-call');
+
+    // Generate the initial greeting message using Eleven Labs
+    const greetingMessage = "Welcome, please state your query!";
+    const publicGreetingUrl = await textToSpeechAndUpload(greetingMessage);  // Await for TTS
+
+    // Serve the greeting message via Twilio and gather user input
+    const voiceResponse = new twilio.twiml.VoiceResponse();
+    voiceResponse.play(publicGreetingUrl);  // Play the Eleven Labs greeting audio
+
+    // Gather input after the greeting
+    voiceResponse.gather({
+      input: ["speech"],
+      speechTimeout: "5", // "auto" can be replaced with a specific time
+      speechModel: "phone_call",
+      enhanced: true,
+      action: '/respond',
+    });
+
+    c.header('Content-Type', 'application/xml');
+    return c.body(voiceResponse.toString());
+  } catch (error) {
+    console.error('Error in /incoming-call route:', error);
+    return c.text('Server error', 500);
+  }
 });
+
 
 app.post('/respond', async (c) => {
   try {
