@@ -57,17 +57,17 @@ def analyze_negativity(text):
     return analysis.sentiment.polarity > 0  # Positive polarity indicates valid information
 
 # Function to send data to Google Sheets
-def send_to_google_sheet(fullname, email, notes):
+def send_to_google_sheet(fullname, email, phone, notes):
     logger.info("Triggered send_to_google_sheet function.")
-    logger.info(f"Data to send: Full Name: {fullname}, Email: {email}, Notes: {notes}")
+    logger.info(f"Data to send: Full Name: {fullname}, Email: {email}, Phone: {phone}, Notes: {notes}")
 
-    values = [[fullname, email, notes]]
+    values = [[fullname, email, phone, notes]]
     body = {'values': values}
 
     try:
         result = sheet.values().append(
             spreadsheetId=GOOGLE_SHEET_ID,
-            range=GOOGLE_SHEET_RANGE,
+            range=GOOGLE_SHEET_RANGE,  # Adjust the range to include the phone column
             valueInputOption="RAW",
             body=body
         ).execute()
@@ -81,7 +81,6 @@ def send_to_google_sheet(fullname, email, notes):
     except Exception as e:
         logger.error(f"Exception occurred while sending data to Google Sheets: {e}")
         return False
-
 
 # File paths and constants
 DOCUMENT_PATH = "docs/Solar_guide.pdf"
@@ -160,74 +159,85 @@ def read_root():
 
 # Define the two persona prompts
 initial_persona_prompt = (    
-"You are a friendly representative of Kay Soley, knowledgeable about solar energy. Your goal is to engage in a natural conversation, and answer based on the Solar Guide any questions the user may have. If a question cannot be asnwered by the content of the Solar Guide, answer following the industry's standards. Do not ask for personal information at this stage."
+"You are a friendly representative of Kay Soley, knowledgeable about solar energy. Don't say Hello. Your goal is to engage in a natural conversation, and answer based on the Solar Guide any questions the user may have. Do not ask for personal information at this stage.\n If a question cannot be asnwered by the content of the Solar Guide, say that you are unsure and that the user should ask this question to one of our Technicians during a telephone or home appointment.\n Clarity and Conciseness: Use bullet points or numbered lists for clarity in your responses, and keep responses concise, limited to 2-3 sentences."
 )
 
 salesman_persona_prompt = (
-    "You are a friendly and persuasive solar energy salesman working for Kay Soley. Your goal is to engage in a natural conversation with the user,       subtly gather their full name, email address, and any specific needs or questions they may have about solar energy and Kay Soley with brief answers\n"
-    "Instructions:\n"
-    "- Begin by building rapport and expressing enthusiasm for helping the user learn about solar energy.\n"
-    "- Ask open-ended questions to understand the user's interest in solar energy and gently guide the conversation towards gathering their contact information.\n"
-    "- Offer relevant information about Kay Soley's solar energy solutions and how they can meet the user's needs.\n"
-    "- Use a polite and non-intrusive approach when asking for the user's full name and email address.\n"
+    "You are a friendly and persuasive solar energy salesman working for Kay Soley. "
+    "Don't say Hello. Your goal is to engage in a natural conversation with the user, subtly gather their full name, email address, phone number, and any specific needs or questions they may have about solar energy and Kay Soley with brief answers. "
+    "Clarity and Conciseness: Use bullet points or numbered lists for clarity in your responses, and keep responses concise, limited to 2-3 sentences.\n"
+    "- Use a polite and non-intrusive approach when asking for the user's full name, phone number and email address.\n"
     "- Ensure the conversation feels natural and the user feels comfortable providing their information.\n\n"
     "Desired Format:\n"
     "- Gather the following information from the user:\n"
     "  - Full Name: <extracted full name if any>\n"
     "  - Email: <extracted email address if any>\n"
-    "  - Notes: <Brief summary of the conversation and user's needs or questions>"
+    "  - Phone: <extracted phone number if any>\n"
+    "  - Notes: <Brief and precise summary of the user's needs or questions>"
 )
 
 # Dictionaries to track user state
 exchange_count = {}
+user_data = {}
 info_collected = {}
+salesman_prompt_given = {}
 
-def analyze_input_for_information(input_text):
-    """Analyzes the user's input to check for personal information."""
+def analyze_input_for_information(input_text, conversation_history, user_id):
+    """Analyzes the user's input and full conversation history to check for personal information and create a summary."""
+
     verification_prompt = f"""
-    You are to analyze the following conversation to verify if it contains the user's full name, email address, and a brief summary of their needs or questions.
+    You are to analyze the following conversation and input to verify if it contains the user's full name, email address, phone number, and provide a brief summary of their needs, intent, or questions based on the entire conversation.
 
     Conversation:
+    {conversation_history}
+
+    Latest Input:
     {input_text}
 
     Please respond with the information found in the following format:
     Full Name: <extracted full name if any>
     Email: <extracted email address if any>
-    Notes: <Brief summary of the conversation>
+    Phone: <extracted phone number if any>
+    Notes: <Brief and precise summary of the user's intent and profile based on the entire conversation>
     """
 
-    # Get the response from the LLM specifically for verification
+    # Get the response from the LLM for verification and summarization
     verification_result = llm.invoke(verification_prompt)
-
-    # Print the verification result for debugging purposes
-    print(f"Verification LLM Output: {verification_result.content}")
 
     extracted_data = verification_result.content.strip().split("\n")
 
-    fullname = "N/A"
-    email = "N/A"
+    fullname = user_data.get(user_id, {}).get('fullname', 'N/A')
+    email = user_data.get(user_id, {}).get('email', 'N/A')
+    phone = user_data.get(user_id, {}).get('phone', 'N/A')
     notes = "N/A"
     detect = False
 
-    # Improve detection logic by looking for common name and email patterns
+    # Parsing the extracted data for name, email, phone, and notes
     for item in extracted_data:
         if item.startswith("Full Name:"):
             extracted_fullname = item.replace("Full Name:", "").strip()
             if extracted_fullname and extracted_fullname.lower() != "not provided":
                 fullname = extracted_fullname
-                detect = True
         elif item.startswith("Email:"):
             extracted_email = item.replace("Email:", "").strip()
             if extracted_email and "@" in extracted_email:  # Simple email pattern detection
                 email = extracted_email
-                detect = True
+        elif item.startswith("Phone:"):
+            extracted_phone = item.replace("Phone:", "").strip()
+            if extracted_phone and len(extracted_phone) >= 10:  # Basic phone number validation
+                phone = extracted_phone
         elif item.startswith("Notes:"):
             extracted_notes = item.replace("Notes:", "").strip()
             if extracted_notes and extracted_notes.lower() != "not provided":
                 notes = extracted_notes
-                detect = True
 
-    return fullname, email, notes, detect
+    # Store the collected information in the user_data dictionary
+    user_data[user_id] = {"fullname": fullname, "email": email, "phone": phone, "notes": notes}
+
+    # Check if all required information is collected
+    detect = all(value != "N/A" for value in user_data[user_id].values())
+
+    return fullname, email, phone, notes, detect
 
 @app.post("/chat")
 async def chat(request: Request):
@@ -240,16 +250,30 @@ async def chat(request: Request):
 
     logger.info(f"Query received: {input_text}")
 
-    # Get user ID to track exchange count (for demo purposes, using a placeholder user_id)
-    user_id = "user_demo"  # Replace this with actual user ID tracking logic if needed
-    exchange_count[user_id] = exchange_count.get(user_id, 0) + 1
-    info_collected[user_id] = info_collected.get(user_id, False)
+    # Use a dynamic user ID if needed, or replace with proper authentication logic
+    user_id = "user_demo"
+
+    # Initialize tracking for user if not already done
+    if user_id not in exchange_count:
+        exchange_count[user_id] = 0
+    if user_id not in info_collected:
+        info_collected[user_id] = False
+    if user_id not in user_data:
+        user_data[user_id] = {
+            "fullname": "N/A",
+            "email": "N/A",
+            "phone": "N/A",
+            "notes": "N/A"
+        }
+    if user_id not in salesman_prompt_given:
+        salesman_prompt_given[user_id] = False  # Track if salesman prompt has been given
+
+    # Increment exchange count for the user
+    exchange_count[user_id] += 1
 
     try:
-        # Determine which persona prompt to use based on the exchange count and whether info has been collected
-        if info_collected[user_id]:
-            persona_prompt = initial_persona_prompt
-        elif exchange_count[user_id] < 3:
+        # Determine whether to use the initial or salesman persona prompt based on the conversation stage
+        if info_collected[user_id] or exchange_count[user_id] < 3:
             persona_prompt = initial_persona_prompt
         else:
             persona_prompt = salesman_persona_prompt
@@ -257,44 +281,70 @@ async def chat(request: Request):
         # Retrieve relevant knowledge from the vectorstore
         context = retriever.get_relevant_documents(input_text)
         context_text = "\n\n".join([doc.page_content for doc in context])
-        # Combine the persona prompt, context, and user query
         question_with_context = f"{persona_prompt}\n\nContext:\n{context_text}\n\nQuestion: {input_text}"
 
         # Get the response from the LLM using the conversation chain
         conversation_response = conversation_chain.run(question_with_context)
         logger.info(f"LLM response for conversation: {conversation_response}")
 
-        # If this is the third exchange or later, analyze user input for personal information and negativity
-        if exchange_count[user_id] >= 3 and not info_collected[user_id]:
-            fullname, email, notes, detect = analyze_input_for_information(input_text)
+        # If the salesman persona is active, check if it was already given
+        if persona_prompt == salesman_persona_prompt:
+            if not salesman_prompt_given[user_id]:
+                # First time showing the salesman prompt, just return it without analyzing the input
+                salesman_prompt_given[user_id] = True
+                return {"answer": conversation_response}
+            else:
+                # Salesman prompt was already given, analyze the user's response for missing information
+                conversation_history = conversation_memory.buffer
 
-            if detect:
-                collected_info = {"fullname": fullname, "email": email, "notes": notes}
-                logger.info(f"Extracted Information - Full Name: {fullname}, Email: {email}, Notes: {notes}")
+                # Analyze user input and conversation history to extract missing information
+                fullname, email, phone, notes, detect = analyze_input_for_information(input_text, conversation_history, user_id)
 
-                # If all information is collected and valid, send it to Google Sheets
-                if all(value != "N/A" for value in collected_info.values()):
-                    logger.info("All required information collected and valid. Sending to Google Sheets...")
-                    if send_to_google_sheet(collected_info["fullname"],
-                                            collected_info["email"],
-                                            collected_info["notes"]):
-                        # Mark information as collected and reset to initial persona prompt
+                # Update the user data with any new information
+                user_data[user_id] = {
+                    "fullname": fullname,
+                    "email": email,
+                    "phone": phone,
+                    "notes": notes
+                }
+
+                if detect:
+                    logger.info(f"All required information collected for user {user_id}: {user_data[user_id]}")
+
+                    # Send the collected information to Google Sheets
+                    if send_to_google_sheet(user_data[user_id]["fullname"],
+                                            user_data[user_id]["email"],
+                                            user_data[user_id]["phone"],
+                                            user_data[user_id]["notes"]):
+                        # Mark info as collected and reset for this user
                         info_collected[user_id] = True
                         return {
                             "answer": 
-                            "Thank you! Your information has been collected successfully. We'll be in touch soon."
+                            "Thank you for providing your details, we will get back to you shortly. Thank you for your trust."
                         }
                     else:
                         logger.error("Failed to send information to Google Sheets.")
                         return {"answer": conversation_response}
 
-        # If not all information is collected, send the first GPT response directly to Voiceflow
-        return {"answer": conversation_response}
+                # If all data is not yet collected, continue asking for missing data
+                #missing_info_response = ""
+                #if user_data[user_id]["fullname"] == "N/A":
+                #    missing_info_response += "Could you please provide your full name? "
+                #if user_data[user_id]["email"] == "N/A":
+                #    missing_info_response += "Can you share your email address? "
+                #if user_data[user_id]["phone"] == "N/A":
+                #    missing_info_response += "I still need your phone number, if you don't mind. "
 
+                return {"answer": conversation_response}
+
+        # Return the response if not in salesman mode
+        return {"answer": conversation_response}
 
     except Exception as e:
         logger.error(f"Error during chat invocation: {e}")
         return {"error": str(e)}
+
+
 
 if __name__ == "__main__":
     logger.info("Starting the FastAPI server...")

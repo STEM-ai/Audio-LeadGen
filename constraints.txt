@@ -1,0 +1,5 @@
+websockets
+nvidia-cuda-runtime
+nvidia-cudnn
+nvidia-tensorrt
+nvidia-nvcc
