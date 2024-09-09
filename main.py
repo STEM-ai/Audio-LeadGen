@@ -87,6 +87,9 @@ DOCUMENT_PATH = "docs/Solar_guide.pdf"
 HASH_FILE = "document_hash.txt"
 VECTOR_STORE_PATH = "faiss_vector_db"
 
+# Initialize Conversation Buffer Memory
+conversation_memory = ConversationBufferMemory()
+
 # Function to calculate the hash of the document
 def calculate_file_hash(filepath):
     hash_algo = hashlib.sha256()
@@ -128,15 +131,13 @@ def ingest_docs():
 # Check if document has changed and ingest if needed
 if document_changed():
     logger.info("Document changed. Ingesting new document...")
+    conversation_memory.clear()
     ingest_docs()
 else:
     logger.info("Document unchanged. Loading existing vector store.")
 
 vectorstore = FAISS.load_local(VECTOR_STORE_PATH, OpenAIEmbeddings(), allow_dangerous_deserialization=True)
 retriever = vectorstore.as_retriever()
-
-# Initialize Conversation Buffer Memory
-conversation_memory = ConversationBufferMemory()
 
 # Initialize the Conversation Chain with memory
 conversation_chain = ConversationChain(
