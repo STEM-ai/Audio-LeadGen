@@ -240,26 +240,35 @@ def analyze_input_for_information(input_text, conversation_history, user_id):
 
     return fullname, email, phone, notes, detect
 
+# Function to clear the .cache directory
+def clear_cache():
+    cache_path = ".cache/*"  # Path to the cache directory
+    try:
+        os.system(f"rm -rf {cache_path}")
+        logger.info(".cache directory has been cleared.")
+    except Exception as e:
+        logger.error(f"Error while clearing cache: {e}")
 
-# Function to reset conversation memory
-def reset_conversation_memory():
+# Function to clear both conversation memory and cache
+def reset_conversation_and_cache():
     global conversation_memory
     conversation_memory.clear()
     logger.info("Conversation memory has been cleared.")
 
-# Background task to reset conversation memory every 20 minutes
-async def periodic_memory_reset():
+    # Clear cache directory
+    clear_cache()
+
+# Background task to clear memory and cache every 20 minutes
+async def periodic_reset():
     while True:
         await asyncio.sleep(20 * 60)  # Wait for 20 minutes
-        reset_conversation_memory()
+        reset_conversation_and_cache()
 
 @app.on_event("startup")
 async def startup_event():
     # Start the background task when the FastAPI app starts
-    asyncio.create_task(periodic_memory_reset())
+    asyncio.create_task(periodic_reset())
     logger.info("Started background task to reset conversation memory every 20 minutes.")
-
-
 
 @app.post("/chat")
 async def chat(request: Request):
