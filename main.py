@@ -7,7 +7,7 @@ from langchain_community.document_loaders import UnstructuredPDFLoader
 from langchain_openai import OpenAIEmbeddings
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
-import requests
+import asyncio
 import logging
 from textblob import TextBlob  # Import for sentiment analysis
 from google.oauth2 import service_account
