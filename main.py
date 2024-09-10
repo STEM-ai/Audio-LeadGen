@@ -160,11 +160,11 @@ def read_root():
 
 # Define the two persona prompts
 initial_persona_prompt = (    
-"You are a friendly representative of Kay Soley, knowledgeable about solar energy. Don't say Hello. Your goal is to engage in a natural conversation, and answer based on the Solar Guide any questions the user may have. Do not ask for personal information at this stage.\n If a question cannot be asnwered by the content of the Solar Guide, say that you are unsure and that the user should ask this question to one of our Technicians during a telephone or home appointment.\n Clarity and Conciseness: Use bullet points or numbered lists for clarity in your responses, and keep responses concise, limited to 2-3 sentences."
+"You are a friendly representative of Kay Soley, knowledgeable about solar energy. Answer in the same language as the user. Don't say Hello. Your goal is to engage in a natural conversation, and answer based on the Solar Guide any questions the user may have. Do not ask for personal information at this stage.\n If a question cannot be asnwered by the content of the Solar Guide, say that you are unsure and that the user should ask this question to one of our Technicians during a telephone or home appointment.\n Clarity and Conciseness: Use bullet points or numbered lists for clarity in your responses, and keep responses concise, limited to 2-3 sentences."
 )
 
 salesman_persona_prompt = (
-    "You are a friendly and persuasive solar energy salesman working for Kay Soley. "
+    "You are a friendly and persuasive solar energy salesman working for Kay Soley. Answer in the same language as the user. "
     "Don't say Hello. Your goal is to engage in a natural conversation with the user, subtly gather their full name, email address, phone number, and any specific needs or questions they may have about solar energy and Kay Soley with brief answers. "
     "Clarity and Conciseness: Use bullet points or numbered lists for clarity in your responses, and keep responses concise, limited to 2-3 sentences.\n"
     "- Use a polite and non-intrusive approach when asking for the user's full name, phone number and email address.\n"
@@ -239,6 +239,27 @@ def analyze_input_for_information(input_text, conversation_history, user_id):
     detect = all(value != "N/A" for value in user_data[user_id].values())
 
     return fullname, email, phone, notes, detect
+
+
+# Function to reset conversation memory
+def reset_conversation_memory():
+    global conversation_memory
+    conversation_memory.clear()
+    logger.info("Conversation memory has been cleared.")
+
+# Background task to reset conversation memory every 20 minutes
+async def periodic_memory_reset():
+    while True:
+        await asyncio.sleep(20 * 60)  # Wait for 20 minutes
+        reset_conversation_memory()
+
+@app.on_event("startup")
+async def startup_event():
+    # Start the background task when the FastAPI app starts
+    asyncio.create_task(periodic_memory_reset())
+    logger.info("Started background task to reset conversation memory every 20 minutes.")
+
+
 
 @app.post("/chat")
 async def chat(request: Request):
@@ -321,7 +342,7 @@ async def chat(request: Request):
                         info_collected[user_id] = True
                         return {
                             "answer": 
-                            "Thank you for providing your details, we will get back to you shortly. Thank you for your trust."
+                            "Merci beaucoup ! Nous vous contacterons sous peu."
                         }
                     else:
                         logger.error("Failed to send information to Google Sheets.")

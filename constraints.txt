@@ -1,5 +1,12 @@
-websockets
-nvidia-cuda-runtime
-nvidia-cudnn
-nvidia-tensorrt
-nvidia-nvcc
+nvidia-cuda-runtime==0
+nvidia-cudnn==0
+nvidia-tensorrt==0
+nvidia-nvcc==0
+websocket==0
+websocket-client==0
+websockets==0
+triton==0
+opencv-python==0
+onnx==0
+onnxruntime==0
+nvidia==0

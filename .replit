@@ -2,7 +2,6 @@ run = "uvicorn main:app --host 0.0.0.0 --port 3000"
 modules = ["python-3.10", "nix"]
 
 language = "python"
-entrypoint = "main.py"
 
 hidden = [".pythonlibs"]
 
