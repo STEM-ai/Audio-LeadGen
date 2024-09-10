@@ -1,4 +1,4 @@
-run = "uvicorn main:app --host 0.0.0.0 --port 3000"
+run = "uvicorn main:app --host 0.0.0.0 --port 8000"
 modules = ["python-3.10", "nix"]
 
 language = "python"
@@ -10,15 +10,11 @@ channel = "stable-24_05"
 file = "replit.nix"
 
 [deployment]
-run = ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port 3000"]
+run = ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port 8000"]
 deploymentTarget = "cloudrun"
 
 [packager]
 afterInstall = "pip install -r requirements.txt -c constraints.txt"
-
-[[ports]]
-localPort = 3000
-externalPort = 3000
 
 [[ports]]
 localPort = 8000

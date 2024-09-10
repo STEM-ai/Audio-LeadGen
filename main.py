@@ -22,6 +22,9 @@ logger = logging.getLogger(__name__)
 # Set up the language model (using GPT-3.5-turbo)
 llm = ChatOpenAI(model="gpt-4-turbo", temperature=0)
 
+# Define retriever as a global variable
+retriever = None
+
 # Google Sheets credentials - replace with your actual values
 GOOGLE_SHEET_ID = "10oAG2URrrX1YJr0StNAXszFycYPwBMmj9N6Y18TwcVk"  # Your Google Sheet ID
 GOOGLE_SHEET_RANGE = "Sheet1!A1:C1"  # Example range, adjust according to your needs
@@ -117,27 +120,43 @@ def document_changed():
 
 # Function to load and ingest documents
 def ingest_docs():
-    logger.info("Starting document ingestion process.")
+    # Load the document
     loader = UnstructuredPDFLoader(DOCUMENT_PATH)
     docs = loader.load()
+
+    # Split the documents into chunks
     text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
     chunks = text_splitter.split_documents(docs)
 
-    vectorstore = FAISS.from_documents(documents=chunks, embedding=OpenAIEmbeddings())
+    # Initialize OpenAI Embeddings
+    embeddings = OpenAIEmbeddings()
+
+    # Check if chunks are created correctly
+    if not chunks:
+        raise ValueError("No chunks created from the document. Check the document loading process.")
+
+    # Create or overwrite the vector store
+    vectorstore = FAISS.from_documents(documents=chunks, embedding=embeddings)
     vectorstore.save_local(VECTOR_STORE_PATH)
-    logger.info("Document successfully ingested into knowledge base")
+
     print("Document successfully ingested into knowledge base")
+
+    return vectorstore  # Return the vectorstore to update retriever globally
+
 
 # Check if document has changed and ingest if needed
 if document_changed():
-    logger.info("Document changed. Ingesting new document...")
+    print("Document changed. Ingesting new document...")
     conversation_memory.clear()
-    ingest_docs()
+    conversation_memory = ConversationBufferMemory()
+    print("Conversation memory cleared")
+    # Ingest the new documents and update the retriever
+    vectorstore = ingest_docs()
+    retriever = vectorstore.as_retriever()  # Update the global retriever after ingestion
 else:
-    logger.info("Document unchanged. Loading existing vector store.")
-
-vectorstore = FAISS.load_local(VECTOR_STORE_PATH, OpenAIEmbeddings(), allow_dangerous_deserialization=True)
-retriever = vectorstore.as_retriever()
+    print("Document unchanged. Loading existing vector store.")
+    vectorstore = FAISS.load_local(VECTOR_STORE_PATH, OpenAIEmbeddings(), allow_dangerous_deserialization=True)
+    retriever = vectorstore.as_retriever()  # Set retriever during initialization
 
 # Initialize the Conversation Chain with memory
 conversation_chain = ConversationChain(
