@@ -20,7 +20,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Set up the language model (using GPT-3.5-turbo)
-llm = ChatOpenAI(model="gpt-4-turbo", temperature=0)
+llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
 
 # Define retriever as a global variable
 retriever = None
@@ -259,6 +259,13 @@ def analyze_input_for_information(input_text, conversation_history, user_id):
 
     return fullname, email, phone, notes, detect
 
+async def reset_exchange_count():
+    global exchange_count  # Declare exchange_count as global to modify the global variable
+    while True:
+        await asyncio.sleep(120)  # Wait for 10 minutes (600 seconds)
+        exchange_count.clear()  # Clear the exchange count for all users
+        print("Exchange counts reset.")
+
 # Function to clear the .cache directory
 def clear_cache():
     cache_path = ".cache/*"  # Path to the cache directory
@@ -282,12 +289,14 @@ async def periodic_reset():
     while True:
         await asyncio.sleep(20 * 60)  # Wait for 20 minutes
         reset_conversation_and_cache()
+        
 
 @app.on_event("startup")
 async def startup_event():
     # Start the background task when the FastAPI app starts
     asyncio.create_task(periodic_reset())
-    logger.info("Started background task to reset conversation memory every 20 minutes.")
+    asyncio.create_task(reset_exchange_count())
+    logger.info("Started background tasks")
 
 @app.post("/chat")
 async def chat(request: Request):
@@ -394,6 +403,21 @@ async def chat(request: Request):
         logger.error(f"Error during chat invocation: {e}")
         return {"error": str(e)}
 
+@app.get("/test-google-sheets")
+def test_google_sheets():
+    test_fullname = "Test User"
+    test_email = "testuser@example.com"
+    test_phone = "1234567890"
+    test_notes = "This is a test note."
+
+    success = send_to_google_sheet(test_fullname, test_email, test_phone, test_notes)
+
+    if success:
+        return {"message": "Test data sent to Google Sheets successfully!"}
+    else:
+        return {"error": "Failed to send test data to Google Sheets."}
+        
+#curl http://localhost:8000/test-google-sheets
 
 
 if __name__ == "__main__":

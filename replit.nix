@@ -1,22 +1,31 @@
-{ pkgs }: {
-  deps = [
-    pkgs.poppler_utils
-    pkgs.rustc
-    pkgs.cargo
-    pkgs.libxcrypt
-    pkgs.bash
-    pkgs.libiconv
+{ pkgs ? import <nixpkgs> {} }:
+
+pkgs.mkShell {
+  buildInputs = [
+    pkgs.google-cloud-sdk
     pkgs.python310
-    pkgs.python310Packages.pip
-    pkgs.python310Packages.uvicorn
-    pkgs.python310Packages.fastapi
-    pkgs.python310Packages.google-auth
-    pkgs.python310Packages.google-api-python-client
     pkgs.python310Packages.requests
-    pkgs.python310Packages.textblob
+    pkgs.python310Packages.uvicorn
+    (pkgs.python310Packages.buildPythonPackage rec {
+      pname = "textblob";
+      version = "0.15.3";
+
+      src = pkgs.fetchPypi {
+        inherit pname version;
+        sha256 = "0f1b3da8d869654a45a34674e4d29b0d5e8bddf4ea0e5ff7cfea5db6f3c1fc14";
+      };
+
+      propagatedBuildInputs = with pkgs.python310Packages; [ nltk numpy six ];
+
+      meta = with pkgs.lib; {
+        description = "Simple, Pythonic text processing.";
+        homepage = "https://textblob.readthedocs.io";
+        license = licenses.mit;
+      };
+    })
   ];
 
   shellHook = ''
-    pip install -r requirements.txt --constraint constraints.txt
+    echo "Shell environment set up."
   '';
 }
