@@ -1,4 +1,6 @@
 import os
+import time
+import json
 import hashlib
 from fastapi import FastAPI, Request
 import uvicorn
@@ -19,6 +21,9 @@ from langchain.chains import ConversationChain
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Log the server time to ensure clock synchronization
+logger.info(f"Server time at startup: {time.ctime()}")
+
 # Set up the language model (using GPT-3.5-turbo)
 llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
 
@@ -30,25 +35,21 @@ GOOGLE_SHEET_ID = "10oAG2URrrX1YJr0StNAXszFycYPwBMmj9N6Y18TwcVk"  # Your Google 
 GOOGLE_SHEET_RANGE = "Sheet1!A1:C1"  # Example range, adjust according to your needs
 
 # Service Account JSON contents
-SERVICE_ACCOUNT_INFO = {
-  "type": "service_account",
-  "project_id": "ferrous-thought-432910-d3",
-  "private_key_id": "182b04aace7cf843455d7097555028be3a55566f",
-  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQDZX9pIDORMMchf\nQFE/cAV4VPVEpaq8rW0GJSIPnF2dXRoegSy7O5YNStoSWgMu74PDUreO2CGi/Wku\nlh8pbUGBsPbf4VkLNqmVGcqL6RkG5d4AhZQp5RomX+WyOwIhpd65SrqHXtRIpKyW\nteSrei5+G+mjYWNtH6lVoEkF7ezdXd2D/gFa9Q65GHJKF9E6hInRph346rvbTd8Z\nkB38/TOOc6GBr3XTt1x4dY5nBJqsX4Bqe2nxDvyveQJ4v0rPrYStZRM4KlnFKTWP\nkexwXwfnWxtNNeC1TVIDvRWiVV0JS99ymyODmJn33eLmziFN0EJJdquD0iTfRf51\ncBsH8UzNAgMBAAECggEACIoF6qeq/j1EaE2AA5R0eo4n1msFooTTkBa8WE2ltc1W\n/dTIO5CzK9GBcJAdqOXa0Lz6nf9qjtsSmzRlg/yZQq1/fTr+gvzCO6u4M7fT9lvo\nVS/qKp0n4lMJFG/R/R1levTvD+tPPo1NhFwf4AacNfMFwhfMzpgcUFNMGxIGKIn5\nVa4rJifeuhCJNK8HsyAI3ChnvXcqvQE94nmIpKv4va+tsHB9vg+4c/mcJZ+V7U9d\n/a/MUFzf7TkQtsHaz6HN+wHR4QHg8bohEt+4IyHWV2BPbAJ8J0SgWzXMyDS/54Pk\n2cnoDCp0bliR1D6X7YlCAQrtpJnGyLJ/ZU1S4EaVcQKBgQD//qRFaBZp2CmkyoMi\nIfjcBmEacL0Z3CUMAMEowgxmUBiPme/vePVKM2ZfK4dBTtmTbGmKZzZ2iCZy5psF\nMnmMc18XfVoqAaNEnYHnvVYj/kv+hJ8wYkyyj64U7qALXp4SBvZ+BAY9qgj5/E6t\nuFGBRYV9j9kmVkzhoXWF8nU++QKBgQDZYQGM+3gWMYANkENBv+yU3bBQ9NJ6jY4P\n7kHx4PBc6f3cP1WB0y4CMPeBpGwKxVsJ350I8BkHnE+Ixu+QStub3lzNjvxXYPlb\nfeQqZpIEKAmDqzbdfjrH8LyewZOZVZTB95MpcZnCS9fGrbMw8sxPhzSURUUsoGmE\nQyCZZkftdQKBgQDl9OGts2XG6LXn4T7Qz4GUbGqX7MQB0d65nIfnTAEFe1fEz3xY\nOujlIa0JOrnCMcmDA7T+7d5ftcgMGRkSHxhO0WiPWjw/Vb9LKM4D1PHnXUz4sjup\no/PPxv+SsBS2geUuvnB4HLdadz6fCUXICbW1kTTr6Ocg6A8h8/71NyqZSQKBgQCx\nlF+R7nSBnNqBOhLXiZQZYKkC2Z2AZFdjiD3y/NEe9kBeRpbxwbTaMWpgTBO/EM54\nWGaOwKWR5A3NLMbT13Nj99lUS7S1JRFPvp5ATR6HqrVrDNl7Q/19DJrqDjUnlBQ8\nCKX9u0HiydZyBcBXAmIJreg0IAqMlFbep3/gEQA9aQKBgGlrZ7W1G5tdmCdsEZ/m\nJXFyHaPKg8k/mP5R+GkRaIdjpZ/nE+95pwy8Mp3KUFbcloI//y5l1tmxYRxX2JbN\nd6I1hfCRdCUFNuKEMRiYM0ClrMt5fXUFVoibWD6vuYwLiFn/iZe006XRxHrw2zK1\nXwyfGKc/ObC7K3vt2rBnb1dQ\n-----END PRIVATE KEY-----\n",
-  "client_email": "leadgen@ferrous-thought-432910-d3.iam.gserviceaccount.com",
-  "client_id": "116199920320342924096",
-  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-  "token_uri": "https://oauth2.googleapis.com/token",
-  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
-  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/leadgen%40ferrous-thought-432910-d3.iam.gserviceaccount.com",
-  "universe_domain": "googleapis.com"
-}
+# Load the service account from Replit secret
+service_account_info = os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON")
 
-# Set up Google Sheets API client
-creds = service_account.Credentials.from_service_account_info(
-    SERVICE_ACCOUNT_INFO,
-    scopes=["https://www.googleapis.com/auth/spreadsheets"]
-)
+# Parse the JSON from the environment variable
+if service_account_info:
+    service_account_info = json.loads(service_account_info)
+
+    # Create the service account credentials
+    creds = service_account.Credentials.from_service_account_info(
+        service_account_info,
+        scopes=["https://www.googleapis.com/auth/spreadsheets"]
+    )
+else:
+    raise EnvironmentError("Service account info is missing in the environment variables")
+    
 service = build('sheets', 'v4', credentials=creds)
 sheet = service.spreadsheets()
 
