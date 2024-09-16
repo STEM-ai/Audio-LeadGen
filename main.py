@@ -277,6 +277,8 @@ user_data = {}
 info_collected = {}
 salesman_prompt_given = {}
 conversation_memory_dict = {}  # A dictionary to hold conversation memory for each session
+last_active_time = {}  # A dictionary to track the last activity time of each session
+
 
 def analyze_input_for_information(input_text, conversation_history, user_id):
     """Analyzes the user's input and full conversation history to check for personal information and create a summary."""
@@ -351,11 +353,29 @@ def clear_cache():
     except Exception as e:
         logger.error(f"Error while clearing cache: {e}")
 
+def cleanup_sessions(timeout=3600):  # Timeout in seconds (1 hour)
+    current_time = time.time()
+    to_remove = []
+    for session_id, last_active in last_active_time.items():
+        if current_time - last_active > timeout:
+            to_remove.append(session_id)
+
+    for session_id in to_remove:
+        exchange_count.pop(session_id, None)
+        user_data.pop(session_id, None)
+        info_collected.pop(session_id, None)
+        salesman_prompt_given.pop(session_id, None)
+        conversation_memory_dict.pop(session_id, None)
+        last_active_time.pop(session_id, None)
+        logger.info(f"Session {session_id} has been cleaned up due to inactivity.")
+
+
 # Background task to clear memory and cache every 20 minutes
 async def periodic_reset():
     while True:
         await asyncio.sleep(20 * 60)  # Wait for 20 minutes
         clear_cache()
+        cleanup_sessions()
 
 
 @app.on_event("startup")
@@ -377,6 +397,9 @@ async def chat(request: Request):
     if not session_id:
         logger.warning("No session_id provided in the request.")
         return {"error": "No session_id provided"}  # Ensure session_id is present
+
+    # Update last activity time
+    last_active_time[session_id] = time.time()
 
     logger.info(f"Query received: {input_text} | Session ID: {session_id}")
 
