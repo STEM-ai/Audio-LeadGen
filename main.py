@@ -276,7 +276,7 @@ exchange_count = {}
 user_data = {}
 info_collected = {}
 salesman_prompt_given = {}
-
+conversation_memory_dict = {}  # A dictionary to hold conversation memory for each session
 
 def analyze_input_for_information(input_text, conversation_history, user_id):
     """Analyzes the user's input and full conversation history to check for personal information and create a summary."""
@@ -342,15 +342,6 @@ def analyze_input_for_information(input_text, conversation_history, user_id):
 
     return fullname, email, phone, notes, detect
 
-
-async def reset_exchange_count():
-    global exchange_count  # Declare exchange_count as global to modify the global variable
-    while True:
-        await asyncio.sleep(120)  # Wait for 10 minutes (600 seconds)
-        exchange_count.clear()  # Clear the exchange count for all users
-        print("Exchange counts reset.")
-
-
 # Function to clear the .cache directory
 def clear_cache():
     cache_path = ".cache/*"  # Path to the cache directory
@@ -360,29 +351,17 @@ def clear_cache():
     except Exception as e:
         logger.error(f"Error while clearing cache: {e}")
 
-
-# Function to clear both conversation memory and cache
-def reset_conversation_and_cache():
-    global conversation_memory
-    conversation_memory.clear()
-    logger.info("Conversation memory has been cleared.")
-
-    # Clear cache directory
-    clear_cache()
-
-
 # Background task to clear memory and cache every 20 minutes
 async def periodic_reset():
     while True:
         await asyncio.sleep(20 * 60)  # Wait for 20 minutes
-        reset_conversation_and_cache()
+        clear_cache()
 
 
 @app.on_event("startup")
 async def startup_event():
     # Start the background task when the FastAPI app starts
     asyncio.create_task(periodic_reset())
-    asyncio.create_task(reset_exchange_count())
     logger.info("Started background tasks")
 
 
@@ -390,31 +369,41 @@ async def startup_event():
 async def chat(request: Request):
     input_data = await request.json()
     input_text = input_data.get("input")
+    session_id = input_data.get("session_id")  # Capture session_id from the request
 
     if not input_text:
         logger.warning("No input provided in the request.")
         return {"error": "No input provided"}
+    if not session_id:
+        logger.warning("No session_id provided in the request.")
+        return {"error": "No session_id provided"}  # Ensure session_id is present
 
-    logger.info(f"Query received: {input_text}")
+    logger.info(f"Query received: {input_text} | Session ID: {session_id}")
 
-    # Use a dynamic user ID if needed, or replace with proper authentication logic
-    user_id = "user_demo"
+    # Initialize or retrieve the conversation memory for this session
+    if session_id not in conversation_memory_dict:
+        conversation_memory_dict[session_id] = ConversationBufferMemory()
+        logger.info(f"New conversation memory initialized for session {session_id}")
 
-    # Initialize tracking for user if not already done
-    if user_id not in exchange_count:
-        exchange_count[user_id] = 0
-    if user_id not in info_collected:
-        info_collected[user_id] = False
-    if user_id not in user_data:
-        user_data[user_id] = {
+    # Use the session-specific conversation memory
+    conversation_memory = conversation_memory_dict[session_id]
+
+    # Use session_id instead of static user_id
+    user_id = session_id
+
+    if session_id not in exchange_count:
+        exchange_count[session_id] = 0
+    if session_id not in info_collected:
+        info_collected[session_id] = False
+    if session_id not in user_data:
+        user_data[session_id] = {
             "fullname": "N/A",
             "email": "N/A",
             "phone": "N/A",
             "notes": "N/A"
         }
-    if user_id not in salesman_prompt_given:
-        salesman_prompt_given[
-            user_id] = False  # Track if salesman prompt has been given
+    if session_id not in salesman_prompt_given:
+        salesman_prompt_given[session_id] = False  # Track if salesman prompt has been given
 
     # Increment exchange count for the user
     exchange_count[user_id] += 1
@@ -435,6 +424,9 @@ async def chat(request: Request):
         conversation_response = conversation_chain.run(question_with_context)
         logger.info(f"LLM response for conversation: {conversation_response}")
 
+        logger.info(f"Exchange count: {exchange_count[user_id]}")
+
+        
         # If the salesman persona is active, check if it was already given
         if persona_prompt == salesman_persona_prompt:
             if not salesman_prompt_given[user_id]:
@@ -477,15 +469,6 @@ async def chat(request: Request):
                         logger.error(
                             "Failed to send information to Google Sheets.")
                         return {"answer": conversation_response}
-
-                # If all data is not yet collected, continue asking for missing data
-                #missing_info_response = ""
-                #if user_data[user_id]["fullname"] == "N/A":
-                #    missing_info_response += "Could you please provide your full name? "
-                #if user_data[user_id]["email"] == "N/A":
-                #    missing_info_response += "Can you share your email address? "
-                #if user_data[user_id]["phone"] == "N/A":
-                #    missing_info_response += "I still need your phone number, if you don't mind. "
 
                 return {"answer": conversation_response}
 
