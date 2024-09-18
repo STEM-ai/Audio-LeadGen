@@ -87,8 +87,6 @@ def send_to_airtable(fullname, email, phone, notes):
         "Content-Type": "application/json"
     }
 
-    # Log the headers being sent
-    logger.info(f"Request Headers: {headers}")
 
     data = {
         "fields": {
@@ -107,7 +105,6 @@ def send_to_airtable(fullname, email, phone, notes):
 
         # Log the status code and response text
         logger.info(f"Response Status Code: {response.status_code}")
-        logger.info(f"Response Body: {response.text}")
 
         if response.status_code == 200 or response.status_code == 201:
             logger.info("Data successfully sent to Airtable.")
@@ -156,8 +153,7 @@ HASH_FILE = "document_hash.txt"
 VECTOR_STORE_PATH = "faiss_vector_db"
 
 # Initialize Conversation Buffer Memory
-conversation_memory = ConversationBufferMemory()
-
+conversation_memory = ConversationBufferMemory(return_messages=True)
 
 # Function to calculate the hash of the document
 def calculate_file_hash(filepath):
@@ -219,7 +215,7 @@ def ingest_docs():
 if document_changed():
     print("Document changed. Ingesting new document...")
     conversation_memory.clear()
-    conversation_memory = ConversationBufferMemory()
+    conversation_memory = ConversationBufferMemory(return_messages=True)
     print("Conversation memory cleared")
     # Ingest the new documents and update the retriever
     vectorstore = ingest_docs()
@@ -281,10 +277,13 @@ last_active_time = {}  # A dictionary to track the last activity time of each se
 
 
 def analyze_input_for_information(input_text, conversation_history, user_id):
+    # Log the conversation history
+    logger.info(f"Conversation history for user {user_id}: {conversation_history}")
+    
     """Analyzes the user's input and full conversation history to check for personal information and create a summary."""
 
     verification_prompt = f"""
-    You are to analyze the following conversation and input to verify if it contains the user's full name, email address, phone number, and provide a brief summary of their needs, intent, or questions based on the entire conversation.
+    You are to analyze the following conversation and input to verify if it contains user profile and project, and provide a brief summary of their needs, intent, or questions based on the entire 'Conversation'.
 
     Conversation:
     {conversation_history}
@@ -296,7 +295,7 @@ def analyze_input_for_information(input_text, conversation_history, user_id):
     Full Name: <extracted full name if any>
     Email: <extracted email address if any>
     Phone: <extracted phone number if any>
-    Notes: <Brief and precise summary of the user's intent and profile based on the entire conversation>
+    Notes: <Brief summary of the user's questions and profile based on the entire conversation>
     """
 
     # Get the response from the LLM for verification and summarization
@@ -438,6 +437,10 @@ async def chat(request: Request):
         else:
             persona_prompt = salesman_persona_prompt
 
+        # Log the current conversation buffer (before updating it)
+        logger.info(f"Conversation memory for session {session_id} before update: {conversation_memory.buffer}")
+
+
         # Retrieve relevant knowledge from the vectorstore
         context = retriever.get_relevant_documents(input_text)
         context_text = "\n\n".join([doc.page_content for doc in context])
@@ -446,6 +449,11 @@ async def chat(request: Request):
         # Get the response from the LLM using the conversation chain
         conversation_response = conversation_chain.run(question_with_context)
         logger.info(f"LLM response for conversation: {conversation_response}")
+        # Manually save the context in the memory
+        conversation_memory.save_context({"input": input_text}, {"output": conversation_response})
+
+        # Log the updated conversation memory
+        logger.info(f"Conversation memory for session {session_id} after update: {conversation_memory.buffer}")
 
         logger.info(f"Exchange count: {exchange_count[user_id]}")
 
@@ -459,7 +467,7 @@ async def chat(request: Request):
             else:
                 # Salesman prompt was already given, analyze the user's response for missing information
                 conversation_history = conversation_memory.buffer
-
+                logger.info(f"Accessing conversation memory for session {session_id}: {conversation_history}")
                 # Analyze user input and conversation history to extract missing information
                 fullname, email, phone, notes, detect = analyze_input_for_information(
                     input_text, conversation_history, user_id)
@@ -486,7 +494,7 @@ async def chat(request: Request):
                         info_collected[user_id] = True
                         return {
                             "answer":
-                            "Merci beaucoup ! Nous vous contacterons sous peu."
+                            "Merci beaucoup de votre participation ! L'un de nos conseillers prendra contact avec vous rapidement."
                         }
                     else:
                         logger.error(
