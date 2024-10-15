@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 logger.info(f"Server time at startup: {time.ctime()}")
 
 # Set up the language model (using GPT-3.5-turbo)
-llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.5)
 
 # Define retriever as a global variable
 retriever = None
@@ -148,7 +148,8 @@ def send_to_google_sheet(fullname, email, phone, notes):
 
 
 # File paths and constants
-DOCUMENT_PATH = "docs/Solar_guide.pdf"
+DOCUMENT_PATH1 = "docs/Solar_guide.pdf"
+DOCUMENT_PATH2 = "docs/Tarifs_prime_autoconsommatio_V2.pdf"
 HASH_FILE = "document_hash.txt"
 VECTOR_STORE_PATH = "faiss_vector_db"
 
@@ -251,7 +252,15 @@ def read_root():
 
 # Define the two persona prompts
 initial_persona_prompt = (
-    "You are a friendly representative of Kay Soley, knowledgeable about solar energy. Answer in the same language as the user. Don't say Hello. Your goal is to engage in a natural conversation, and answer based on the Solar Guide any questions the user may have. Do not ask for personal information at this stage.\n If a question cannot be asnwered by the content of the Solar Guide, say that you are unsure and that the user should ask this question to one of our Technicians during a telephone or home appointment.\n Clarity and Conciseness: Use bullet points or numbered lists for clarity in your responses, and keep responses concise, limited to 2-3 sentences."
+    "You are a friendly representative of Kay Soley, knowledgeable about solar energy. Answer in the same language as the user. Don't say Hello. Your goal is to engage in a natural conversation, and answer based on the Solar Guide any questions the user may have. Do not ask for personal information at this stage.\n If a question cannot be asnwered by the content of the Solar Guide, say that you are unsure and that the user should ask this question to one of our Technicians during a telephone or home appointment.\n At the end of each answer, ask them open-ended questions to learn more about their project. Clarity and Conciseness: Use bullet points or numbered lists for clarity in your responses, and keep responses concise, limited to 2-3 sentences."
+    "*Understanding the User's Profile* but don't ask all these questions at once:"
+  "- Ask which commune they live in."
+  "- Inquire about their electricity bill amount and whether it's monthly or bi-monthly."
+  "Try to understand their consumption habits:"
+  "- Is the house typically occupied during the day or mainly in the evening?"
+  "- How many people live in the household?"
+  "- Are there air conditioning units? If so, how many?"
+  "- Is there a swimming pool or an electric vehicle?"
 )
 
 salesman_persona_prompt = (
@@ -295,7 +304,7 @@ def analyze_input_for_information(input_text, conversation_history, user_id):
     Full Name: <extracted full name if any>
     Email: <extracted email address if any>
     Phone: <extracted phone number if any>
-    Notes: <Brief summary of the user's questions and profile based on the entire conversation>
+    Notes: <Brief summary in french of the user's questions and profile based on the entire conversation>
     """
 
     # Get the response from the LLM for verification and summarization
@@ -366,13 +375,13 @@ def cleanup_sessions(timeout=3600):  # Timeout in seconds (1 hour)
         salesman_prompt_given.pop(session_id, None)
         conversation_memory_dict.pop(session_id, None)
         last_active_time.pop(session_id, None)
-        logger.info(f"Session {session_id} has been cleaned up due to inactivity.")
+        #logger.info(f"Session {session_id} has been cleaned up due to inactivity.")
 
 
-# Background task to clear memory and cache every 20 minutes
+# Background task to clear memory and cache 
 async def periodic_reset():
     while True:
-        await asyncio.sleep(20 * 60)  # Wait for 20 minutes
+        await asyncio.sleep(3600)  
         clear_cache()
         cleanup_sessions()
 
@@ -381,7 +390,7 @@ async def periodic_reset():
 async def startup_event():
     # Start the background task when the FastAPI app starts
     asyncio.create_task(periodic_reset())
-    logger.info("Started background tasks")
+    #logger.info("Started background tasks")
 
 
 @app.post("/chat")
@@ -391,21 +400,21 @@ async def chat(request: Request):
     session_id = input_data.get("session_id")  # Capture session_id from the request
 
     if not input_text:
-        logger.warning("No input provided in the request.")
+        #logger.warning("No input provided in the request.")
         return {"error": "No input provided"}
     if not session_id:
-        logger.warning("No session_id provided in the request.")
+        #logger.warning("No session_id provided in the request.")
         return {"error": "No session_id provided"}  # Ensure session_id is present
 
     # Update last activity time
     last_active_time[session_id] = time.time()
 
-    logger.info(f"Query received: {input_text} | Session ID: {session_id}")
+    logger.info(f"Query received: {input_text}")
 
     # Initialize or retrieve the conversation memory for this session
     if session_id not in conversation_memory_dict:
         conversation_memory_dict[session_id] = ConversationBufferMemory()
-        logger.info(f"New conversation memory initialized for session {session_id}")
+        #logger.info(f"New conversation memory initialized for session {session_id}")
 
     # Use the session-specific conversation memory
     conversation_memory = conversation_memory_dict[session_id]
@@ -438,7 +447,7 @@ async def chat(request: Request):
             persona_prompt = salesman_persona_prompt
 
         # Log the current conversation buffer (before updating it)
-        logger.info(f"Conversation memory for session {session_id} before update: {conversation_memory.buffer}")
+        #logger.info(f"Conversation memory for session {session_id} before update: {conversation_memory.buffer}")
 
 
         # Retrieve relevant knowledge from the vectorstore
@@ -453,9 +462,9 @@ async def chat(request: Request):
         conversation_memory.save_context({"input": input_text}, {"output": conversation_response})
 
         # Log the updated conversation memory
-        logger.info(f"Conversation memory for session {session_id} after update: {conversation_memory.buffer}")
+        #logger.info(f"Conversation memory for session {session_id} after update: {conversation_memory.buffer}")
 
-        logger.info(f"Exchange count: {exchange_count[user_id]}")
+        #logger.info(f"Exchange count: {exchange_count[user_id]}")
 
         
         # If the salesman persona is active, check if it was already given
@@ -467,7 +476,7 @@ async def chat(request: Request):
             else:
                 # Salesman prompt was already given, analyze the user's response for missing information
                 conversation_history = conversation_memory.buffer
-                logger.info(f"Accessing conversation memory for session {session_id}: {conversation_history}")
+                #logger.info(f"Accessing conversation memory for session {session_id}: {conversation_history}")
                 # Analyze user input and conversation history to extract missing information
                 fullname, email, phone, notes, detect = analyze_input_for_information(
                     input_text, conversation_history, user_id)
@@ -519,23 +528,23 @@ def test_airtable():
     test_notes = "This is a test note."
 
     # Debug logging: print the data we are sending
-    logger.info(f"Attempting to send data to Airtable: Full Name: {test_fullname}, Email: {test_email}, Phone: {test_phone}, Notes: {test_notes}")
+    #logger.info(f"Attempting to send data to Airtable: Full Name: {test_fullname}, Email: {test_email}, Phone: {test_phone}, Notes: {test_notes}")
 
     # Print the Airtable credentials to ensure they are set
-    if not AIRTABLE_PERSONAL_TOKEN:
-        logger.error("Airtable Personal Access Token is missing!")
-    else:
-        logger.info(f"Airtable Personal Access Token (first 10 chars): {AIRTABLE_PERSONAL_TOKEN[:10]}...")
+    #if not AIRTABLE_PERSONAL_TOKEN:
+        #logger.error("Airtable Personal Access Token is missing!")
+    #else:
+        #logger.info(f"Airtable Personal Access Token (first 10 chars): {AIRTABLE_PERSONAL_TOKEN[:10]}...")
 
-    if not AIRTABLE_BASE_ID:
-        logger.error("Airtable Base ID is missing!")
-    else:
-        logger.info(f"Airtable Base ID: {AIRTABLE_BASE_ID}")
+    #if not AIRTABLE_BASE_ID:
+        #logger.error("Airtable Base ID is missing!")
+    #else:
+        #logger.info(f"Airtable Base ID: {AIRTABLE_BASE_ID}")
 
-    if not AIRTABLE_TABLE_NAME:
-        logger.error("Airtable Table Name is missing!")
-    else:
-        logger.info(f"Airtable Table Name: {AIRTABLE_TABLE_NAME}")
+    #if not AIRTABLE_TABLE_NAME:
+        #logger.error("Airtable Table Name is missing!")
+    #else:
+        #logger.info(f"Airtable Table Name: {AIRTABLE_TABLE_NAME}")
 
     # Attempt to send the data to Airtable
     success = send_to_airtable(test_fullname, test_email, test_phone, test_notes)
