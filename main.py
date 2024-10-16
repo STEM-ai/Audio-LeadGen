@@ -60,10 +60,7 @@ else:
 service = build('sheets', 'v4', credentials=creds)
 sheet = service.spreadsheets()
 
-logger.info(
-    f"GOOGLE_SHEET_ID: {GOOGLE_SHEET_ID}, GOOGLE_SHEET_RANGE: {GOOGLE_SHEET_RANGE}"
-)
-
+#logger.info(f"GOOGLE_SHEET_ID: {GOOGLE_SHEET_ID}, GOOGLE_SHEET_RANGE: {GOOGLE_SHEET_RANGE}")
 
 # Function to analyze negativity and update the 'detect' variable
 def analyze_negativity(text):
@@ -156,37 +153,28 @@ VECTOR_STORE_PATH = "faiss_vector_db"
 # Initialize Conversation Buffer Memory
 conversation_memory = ConversationBufferMemory(return_messages=True)
 
-# Function to calculate the hash of the document
-def calculate_file_hash(filepath):
-    hash_algo = hashlib.sha256()
-    with open(filepath, 'rb') as file:
-        while chunk := file.read(8192):
-            hash_algo.update(chunk)
-    return hash_algo.hexdigest()
-
-
 # Function to check if the document has changed
 def document_changed():
-    new_hash = calculate_file_hash(DOCUMENT_PATH)
+    document_mtime = os.path.getmtime(DOCUMENT_PATH1)  # Get the document's last modified time
 
-    if os.path.exists(HASH_FILE):
+    if os.path.exists(HASH_FILE):  # Reuse the HASH_FILE for storing the modification time
         with open(HASH_FILE, 'r') as f:
-            old_hash = f.read()
+            stored_mtime = f.read()
 
-        if new_hash == old_hash:
+        # If the modification time is the same, no need to reprocess the document
+        if str(document_mtime) == stored_mtime:
             return False  # Document hasn't changed
 
-    # Document has changed or HASH_FILE doesn't exist
+    # Document has changed, update the stored modification time
     with open(HASH_FILE, 'w') as f:
-        f.write(new_hash)
+        f.write(str(document_mtime))
 
     return True
-
 
 # Function to load and ingest documents
 def ingest_docs():
     # Load the document
-    loader = UnstructuredPDFLoader(DOCUMENT_PATH)
+    loader = UnstructuredPDFLoader(DOCUMENT_PATH1)
     docs = loader.load()
 
     # Split the documents into chunks
@@ -361,7 +349,7 @@ def clear_cache():
     except Exception as e:
         logger.error(f"Error while clearing cache: {e}")
 
-def cleanup_sessions(timeout=3600):  # Timeout in seconds (1 hour)
+def cleanup_sessions(timeout=3600*6):  # Timeout in seconds (1 hour)
     current_time = time.time()
     to_remove = []
     for session_id, last_active in last_active_time.items():
@@ -377,11 +365,10 @@ def cleanup_sessions(timeout=3600):  # Timeout in seconds (1 hour)
         last_active_time.pop(session_id, None)
         #logger.info(f"Session {session_id} has been cleaned up due to inactivity.")
 
-
 # Background task to clear memory and cache 
 async def periodic_reset():
     while True:
-        await asyncio.sleep(3600)  
+        await asyncio.sleep(3600*6)  
         clear_cache()
         cleanup_sessions()
 
