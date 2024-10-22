@@ -1,7 +1,6 @@
 import os
 import time
 import json
-import hashlib
 from fastapi import FastAPI, Request
 import uvicorn
 import requests
@@ -25,24 +24,20 @@ logger = logging.getLogger(__name__)
 # Log the server time to ensure clock synchronization
 logger.info(f"Server time at startup: {time.ctime()}")
 
-# Set up the language model (using GPT-3.5-turbo)
 llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.5)
 
 # Define retriever as a global variable
 retriever = None
 
-# Airtable credentials
+
 AIRTABLE_PERSONAL_TOKEN = os.getenv(
-    'AIRTABLE_PERSONAL_TOKEN')  # Your Airtable Personal Access Token
-AIRTABLE_BASE_ID = os.getenv('AIRTABLE_BASE_ID')  # Your Airtable Base ID
-AIRTABLE_TABLE_NAME = "LeadGenapp"  # Your Airtable Table Name
+    'AIRTABLE_PERSONAL_TOKEN')  
+AIRTABLE_BASE_ID = os.getenv('AIRTABLE_BASE_ID')  
+AIRTABLE_TABLE_NAME = "LeadGenapp"
 
-# Google Sheets credentials - replace with your actual values
-GOOGLE_SHEET_ID = "10oAG2URrrX1YJr0StNAXszFycYPwBMmj9N6Y18TwcVk"  # Your Google Sheet ID
-GOOGLE_SHEET_RANGE = "Sheet1!A1:C1"  # Example range, adjust according to your needs
+GOOGLE_SHEET_ID = "10oAG2URrrX1YJr0StNAXszFycYPwBMmj9N6Y18TwcVk"
+GOOGLE_SHEET_RANGE = "Sheet1!A1:C1" 
 
-# Service Account JSON contents
-# Load the service account from Replit secret
 service_account_info = os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON")
 
 # Parse the JSON from the environment variable
@@ -62,22 +57,19 @@ sheet = service.spreadsheets()
 
 #logger.info(f"GOOGLE_SHEET_ID: {GOOGLE_SHEET_ID}, GOOGLE_SHEET_RANGE: {GOOGLE_SHEET_RANGE}")
 
-# Function to analyze negativity and update the 'detect' variable
 def analyze_negativity(text):
     analysis = TextBlob(text)
     return analysis.sentiment.polarity > 0  # Positive polarity indicates valid information
 
-
-# Function to send data to Airtable using Personal Access Token
 def send_to_airtable(fullname, email, phone, notes):
-    logger.info("Triggered send_to_airtable function.")
-    logger.info(f"Data to send: Full Name: {fullname}, Email: {email}, Phone: {phone}, Notes: {notes}")
+    #logger.info("Triggered send_to_airtable function.")
+    #logger.info(f"Data to send: Full Name: {fullname}, Email: {email}, Phone: {phone}, Notes: {notes}")
 
     airtable_url = "https://api.airtable.com/v0/appUFMzXqi8COgNVK/tblrvpXEJwY0fmeJR"
 #f"https://api.airtable.com/v0/{AIRTABLE_BASE_ID}/{AIRTABLE_TABLE_NAME}"
 
     # Log the URL being used for the Airtable API call
-    logger.info(f"Using Airtable URL: {airtable_url}")
+    #logger.info(f"Using Airtable URL: {airtable_url}")
 
     headers = {
         "Authorization": f"Bearer pattTKnZnWMKylfKB.c1a91c114dc862bbc68ef761bf580fa50fd0efe76d3a1cc8f9a1495dd3f4954b",#{AIRTABLE_PERSONAL_TOKEN}",
@@ -95,31 +87,27 @@ def send_to_airtable(fullname, email, phone, notes):
     }
 
     # Log the data payload
-    logger.info(f"Payload being sent to Airtable: {data}")
+    #logger.info(f"Payload being sent to Airtable: {data}")
 
     try:
         response = requests.post(airtable_url, headers=headers, json=data)
 
         # Log the status code and response text
-        logger.info(f"Response Status Code: {response.status_code}")
+        #logger.info(f"Response Status Code: {response.status_code}")
 
         if response.status_code == 200 or response.status_code == 201:
-            logger.info("Data successfully sent to Airtable.")
+            #logger.info("Data successfully sent to Airtable.")
             return True
         else:
-            logger.error(f"Failed to send data to Airtable. Status code: {response.status_code}, Response: {response.text}")
+            #logger.error(f"Failed to send data to Airtable. Status code: {response.status_code}, Response: {response.text}")
             return False
     except Exception as e:
-        logger.error(f"Exception occurred while sending data to Airtable: {e}")
+        #logger.error(f"Exception occurred while sending data to Airtable: {e}")
         return False
 
-
-# Function to send data to Google Sheets
 def send_to_google_sheet(fullname, email, phone, notes):
-    logger.info("Triggered send_to_google_sheet function.")
-    logger.info(
-        f"Data to send: Full Name: {fullname}, Email: {email}, Phone: {phone}, Notes: {notes}"
-    )
+
+    #logger.info(f"Data to send: Full Name: {fullname}, Email: {email}, Phone: {phone}, Notes: {notes}")
 
     values = [[fullname, email, phone, notes]]
     body = {'values': values}
@@ -133,7 +121,7 @@ def send_to_google_sheet(fullname, email, phone, notes):
             body=body).execute()
 
         if result:
-            logger.info("Data successfully sent to Google Sheets.")
+            #logger.info("Data successfully sent to Google Sheets.")
             return True
         else:
             logger.error("Failed to send data to Google Sheets.")
@@ -143,8 +131,6 @@ def send_to_google_sheet(fullname, email, phone, notes):
             f"Exception occurred while sending data to Google Sheets: {e}")
         return False
 
-
-# File paths and constants
 DOCUMENT_PATH1 = "docs/Solar_guide.pdf"
 DOCUMENT_PATH2 = "docs/Tarifs_prime_autoconsommatio_V2.pdf"
 HASH_FILE = "document_hash.txt"
@@ -153,7 +139,6 @@ VECTOR_STORE_PATH = "faiss_vector_db"
 # Initialize Conversation Buffer Memory
 conversation_memory = ConversationBufferMemory(return_messages=True)
 
-# Function to check if the document has changed
 def document_changed():
     document_mtime = os.path.getmtime(DOCUMENT_PATH1)  # Get the document's last modified time
 
@@ -163,7 +148,7 @@ def document_changed():
 
         # If the modification time is the same, no need to reprocess the document
         if str(document_mtime) == stored_mtime:
-            return False  # Document hasn't changed
+            return False 
 
     # Document has changed, update the stored modification time
     with open(HASH_FILE, 'w') as f:
@@ -171,21 +156,18 @@ def document_changed():
 
     return True
 
-# Function to load and ingest documents
+
 def ingest_docs():
-    # Load the document
-    loader = UnstructuredPDFLoader(DOCUMENT_PATH1)
-    docs = loader.load()
-
-    # Split the documents into chunks
+    loader1 = UnstructuredPDFLoader(DOCUMENT_PATH1)
+    docs1 = loader1.load()
+    loader2 = UnstructuredPDFLoader(DOCUMENT_PATH2)
+    docs2 = loader2.load()
+    docs = docs1 + docs2
     text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000,
-                                                   chunk_overlap=200)
+                                           chunk_overlap=200)
     chunks = text_splitter.split_documents(docs)
-
-    # Initialize OpenAI Embeddings
     embeddings = OpenAIEmbeddings()
 
-    # Check if chunks are created correctly
     if not chunks:
         raise ValueError(
             "No chunks created from the document. Check the document loading process."
@@ -199,24 +181,21 @@ def ingest_docs():
 
     return vectorstore  # Return the vectorstore to update retriever globally
 
-
-# Check if document has changed and ingest if needed
 if document_changed():
     print("Document changed. Ingesting new document...")
     conversation_memory.clear()
     conversation_memory = ConversationBufferMemory(return_messages=True)
     print("Conversation memory cleared")
-    # Ingest the new documents and update the retriever
     vectorstore = ingest_docs()
     retriever = vectorstore.as_retriever(
-    )  # Update the global retriever after ingestion
+    )
 else:
     print("Document unchanged. Loading existing vector store.")
     vectorstore = FAISS.load_local(VECTOR_STORE_PATH,
                                    OpenAIEmbeddings(),
                                    allow_dangerous_deserialization=True)
     retriever = vectorstore.as_retriever(
-    )  # Set retriever during initialization
+    )
 
 # Initialize the Conversation Chain with memory
 conversation_chain = ConversationChain(
@@ -224,7 +203,6 @@ conversation_chain = ConversationChain(
     memory=conversation_memory,
 )
 
-# Initialize FastAPI application
 app = FastAPI(
     title="LangChain Server with Knowledge Base",
     version="1.0",
@@ -232,15 +210,12 @@ app = FastAPI(
     "A knowledge-based API server using LangChain and Solar Guide as a knowledge source",
 )
 
-
 @app.get("/")
 def read_root():
     return {"message": "Welcome to the root endpoint!"}
 
-
-# Define the two persona prompts
 initial_persona_prompt = (
-    "You are a friendly representative of Kay Soley, knowledgeable about solar energy. Answer in the same language as the user. Don't say Hello. Your goal is to engage in a natural conversation, and answer based on the Solar Guide any questions the user may have. Do not ask for personal information at this stage.\n If a question cannot be asnwered by the content of the Solar Guide, say that you are unsure and that the user should ask this question to one of our Technicians during a telephone or home appointment.\n At the end of each answer, ask them open-ended questions to learn more about their project. Clarity and Conciseness: Use bullet points or numbered lists for clarity in your responses, and keep responses concise, limited to 2-3 sentences."
+    "You are a friendly representative of Kay Soley, knowledgeable about solar energy. Answer in the same language as the user. Your goal is to engage in a natural conversation, and answer based on the Solar Guide any questions the user may have. Do not ask for contact information at this stage.\n If a question cannot be asnwered by the content of the Solar Guide, say that you are unsure and that the user should ask this question to one of our Technicians during a telephone or home appointment.\n At the end of each answer, ask them open-ended questions to learn more about their project. Always refer to the conversation history. Do not repeat questions that have already been asked. No need to greet yourself if already done in the conversation. Clarity and Conciseness: Use bullet points or numbered lists for clarity in your responses, and keep responses concise, limited to 2-3 sentences."
     "*Understanding the User's Profile* but don't ask all these questions at once:"
   "- Ask which commune they live in."
   "- Inquire about their electricity bill amount and whether it's monthly or bi-monthly."
@@ -249,11 +224,12 @@ initial_persona_prompt = (
   "- How many people live in the household?"
   "- Are there air conditioning units? If so, how many?"
   "- Is there a swimming pool or an electric vehicle?"
+    " If the user is not located in Martinique. Tell him that for the moment we are only present in Martinique. We will be able to provide you with the best service in the future."
 )
 
 salesman_persona_prompt = (
     "You are a friendly and persuasive solar energy salesman working for Kay Soley. Answer in the same language as the user. "
-    "Don't say Hello. Your goal is to engage in a natural conversation with the user, subtly gather their full name, email address, phone number, and any specific needs or questions they may have about solar energy and Kay Soley with brief answers. "
+    "Always refer to the conversation history. Do not repeat questions that have already been asked. No need to greet yourself if already done in the conversation.Your goal is to resume a natural conversation with the user, subtly gather their full name, email address, phone number, and any specific needs or questions they may have about solar energy and Kay Soley with brief answers. "
     "Clarity and Conciseness: Use bullet points or numbered lists for clarity in your responses, and keep responses concise, limited to 2-3 sentences.\n"
     "- Use a polite and non-intrusive approach when asking for the user's full name, phone number and email address.\n"
     "- Ensure the conversation feels natural and the user feels comfortable providing their information.\n\n"
@@ -269,13 +245,13 @@ exchange_count = {}
 user_data = {}
 info_collected = {}
 salesman_prompt_given = {}
-conversation_memory_dict = {}  # A dictionary to hold conversation memory for each session
-last_active_time = {}  # A dictionary to track the last activity time of each session
+conversation_memory_dict = {} 
+last_active_time = {} 
+
 
 
 def analyze_input_for_information(input_text, conversation_history, user_id):
-    # Log the conversation history
-    logger.info(f"Conversation history for user {user_id}: {conversation_history}")
+    #logger.info(f"Conversation history for user {user_id}: {conversation_history}")
     
     """Analyzes the user's input and full conversation history to check for personal information and create a summary."""
 
@@ -294,8 +270,6 @@ def analyze_input_for_information(input_text, conversation_history, user_id):
     Phone: <extracted phone number if any>
     Notes: <Brief summary in french of the user's questions and profile based on the entire conversation>
     """
-
-    # Get the response from the LLM for verification and summarization
     verification_result = llm.invoke(verification_prompt)
 
     extracted_data = verification_result.content.strip().split("\n")
@@ -306,7 +280,6 @@ def analyze_input_for_information(input_text, conversation_history, user_id):
     notes = "N/A"
     detect = False
 
-    # Parsing the extracted data for name, email, phone, and notes
     for item in extracted_data:
         if item.startswith("Full Name:"):
             extracted_fullname = item.replace("Full Name:", "").strip()
@@ -315,19 +288,18 @@ def analyze_input_for_information(input_text, conversation_history, user_id):
                 fullname = extracted_fullname
         elif item.startswith("Email:"):
             extracted_email = item.replace("Email:", "").strip()
-            if extracted_email and "@" in extracted_email:  # Simple email pattern detection
+            if extracted_email and "@" in extracted_email: 
                 email = extracted_email
         elif item.startswith("Phone:"):
             extracted_phone = item.replace("Phone:", "").strip()
             if extracted_phone and len(
-                    extracted_phone) >= 10:  # Basic phone number validation
+                    extracted_phone) >= 10:  
                 phone = extracted_phone
         elif item.startswith("Notes:"):
             extracted_notes = item.replace("Notes:", "").strip()
             if extracted_notes and extracted_notes.lower() != "not provided":
                 notes = extracted_notes
 
-    # Store the collected information in the user_data dictionary
     user_data[user_id] = {
         "fullname": fullname,
         "email": email,
@@ -335,21 +307,19 @@ def analyze_input_for_information(input_text, conversation_history, user_id):
         "notes": notes
     }
 
-    # Check if all required information is collected
     detect = all(value != "N/A" for value in user_data[user_id].values())
 
     return fullname, email, phone, notes, detect
 
-# Function to clear the .cache directory
 def clear_cache():
-    cache_path = ".cache/*"  # Path to the cache directory
+    cache_path = ".cache/*" 
     try:
         os.system(f"rm -rf {cache_path}")
-        logger.info(".cache directory has been cleared.")
+        #logger.info(".cache directory has been cleared.")
     except Exception as e:
         logger.error(f"Error while clearing cache: {e}")
 
-def cleanup_sessions(timeout=3600*6):  # Timeout in seconds (1 hour)
+def cleanup_sessions(timeout=3600*6):  # Timeout in seconds
     current_time = time.time()
     to_remove = []
     for session_id, last_active in last_active_time.items():
@@ -384,8 +354,7 @@ async def startup_event():
 async def chat(request: Request):
     input_data = await request.json()
     input_text = input_data.get("input")
-    session_id = input_data.get("session_id")  # Capture session_id from the request
-
+    session_id = input_data.get("session_id")  
     if not input_text:
         #logger.warning("No input provided in the request.")
         return {"error": "No input provided"}
@@ -398,15 +367,12 @@ async def chat(request: Request):
 
     logger.info(f"Query received: {input_text}")
 
-    # Initialize or retrieve the conversation memory for this session
     if session_id not in conversation_memory_dict:
         conversation_memory_dict[session_id] = ConversationBufferMemory()
         #logger.info(f"New conversation memory initialized for session {session_id}")
 
-    # Use the session-specific conversation memory
     conversation_memory = conversation_memory_dict[session_id]
 
-    # Use session_id instead of static user_id
     user_id = session_id
 
     if session_id not in exchange_count:
@@ -421,39 +387,31 @@ async def chat(request: Request):
             "notes": "N/A"
         }
     if session_id not in salesman_prompt_given:
-        salesman_prompt_given[session_id] = False  # Track if salesman prompt has been given
-
-    # Increment exchange count for the user
+        salesman_prompt_given[session_id] = False 
+ 
     exchange_count[user_id] += 1
 
     try:
-        # Determine whether to use the initial or salesman persona prompt based on the conversation stage
         if info_collected[user_id] or exchange_count[user_id] < 3:
             persona_prompt = initial_persona_prompt
         else:
             persona_prompt = salesman_persona_prompt
 
-        # Log the current conversation buffer (before updating it)
         #logger.info(f"Conversation memory for session {session_id} before update: {conversation_memory.buffer}")
-
-
-        # Retrieve relevant knowledge from the vectorstore
+        
         context = retriever.get_relevant_documents(input_text)
         context_text = "\n\n".join([doc.page_content for doc in context])
         question_with_context = f"{persona_prompt}\n\nContext:\n{context_text}\n\nQuestion: {input_text}"
 
-        # Get the response from the LLM using the conversation chain
         conversation_response = conversation_chain.run(question_with_context)
         logger.info(f"LLM response for conversation: {conversation_response}")
         # Manually save the context in the memory
         conversation_memory.save_context({"input": input_text}, {"output": conversation_response})
 
-        # Log the updated conversation memory
         #logger.info(f"Conversation memory for session {session_id} after update: {conversation_memory.buffer}")
 
         #logger.info(f"Exchange count: {exchange_count[user_id]}")
 
-        
         # If the salesman persona is active, check if it was already given
         if persona_prompt == salesman_persona_prompt:
             if not salesman_prompt_given[user_id]:
@@ -481,12 +439,11 @@ async def chat(request: Request):
                         f"All required information collected for user {user_id}: {user_data[user_id]}"
                     )
 
-                    # Send the collected information to the user
                     if send_to_airtable(user_data[user_id]["fullname"],
                                         user_data[user_id]["email"],
                                         user_data[user_id]["phone"],
                                         user_data[user_id]["notes"]):
-                        # Mark info as collected and reset for this user
+
                         info_collected[user_id] = True
                         return {
                             "answer":
@@ -499,7 +456,6 @@ async def chat(request: Request):
 
                 return {"answer": conversation_response}
 
-        # Return the response if not in salesman mode
         return {"answer": conversation_response}
 
     except Exception as e:
@@ -514,10 +470,8 @@ def test_airtable():
     test_phone = "1234567890"
     test_notes = "This is a test note."
 
-    # Debug logging: print the data we are sending
     #logger.info(f"Attempting to send data to Airtable: Full Name: {test_fullname}, Email: {test_email}, Phone: {test_phone}, Notes: {test_notes}")
 
-    # Print the Airtable credentials to ensure they are set
     #if not AIRTABLE_PERSONAL_TOKEN:
         #logger.error("Airtable Personal Access Token is missing!")
     #else:
@@ -532,8 +486,6 @@ def test_airtable():
         #logger.error("Airtable Table Name is missing!")
     #else:
         #logger.info(f"Airtable Table Name: {AIRTABLE_TABLE_NAME}")
-
-    # Attempt to send the data to Airtable
     success = send_to_airtable(test_fullname, test_email, test_phone, test_notes)
 
     if success:
