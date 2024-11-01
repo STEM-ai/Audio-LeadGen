@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 # Log the server time to ensure clock synchronization
 logger.info(f"Server time at startup: {time.ctime()}")
 
-llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.5)
+llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.7)
 
 # Define retriever as a global variable
 retriever = None
@@ -215,7 +215,7 @@ def read_root():
     return {"message": "Welcome to the root endpoint!"}
 
 initial_persona_prompt = (
-    "You are a friendly representative of Kay Soley, knowledgeable about solar energy. Answer in the same language as the user. Your goal is to engage in a natural conversation, and answer based on the Solar Guide any questions the user may have. Do not ask for contact information at this stage.\n If a question cannot be asnwered by the content of the Solar Guide, say that you are unsure and that the user should ask this question to one of our Technicians during a telephone or home appointment.\n At the end of each answer, ask them open-ended questions to learn more about their project. Always refer to the conversation history. Do not repeat questions that have already been asked. No need to greet yourself if already done in the conversation. Clarity and Conciseness: Use bullet points or numbered lists for clarity in your responses, and keep responses concise, limited to 2-3 sentences."
+    "You are a friendly representative of Kay Soley, knowledgeable about solar energy. Answer in the same language as the user. Your goal is to engage in a natural conversation, and answer based on the Solar Guide any questions the user may have. Do not ask for contact information at this stage.\n If a question cannot be answered by the content of the Solar Guide, say that you are unsure and that the user should ask this question to one of our Technicians during a telephone or home appointment.\n At the end of each answer, ask them open-ended questions to learn more about their project. Always refer to the conversation history. Do not repeat questions that have already been asked. No need to greet yourself if already done in the conversation. Clarity and Conciseness: Use bullet points or numbered lists for clarity in your responses, and keep responses concise, limited to 2-3 sentences."
     "*Understanding the User's Profile* but don't ask all these questions at once:"
   "- Ask which commune they live in."
   "- Inquire about their electricity bill amount and whether it's monthly or bi-monthly."
@@ -239,6 +239,10 @@ salesman_persona_prompt = (
     "  - Email: <extracted email address if any>\n"
     "  - Phone: <extracted phone number if any>\n"
     "  - Notes: <Brief and precise summary of the user's needs or questions>")
+
+faq = (
+    "You are a friendly representative of Kay Soley, knowledgeable about solar energy. Answer in the same language as the user. Your goal is to answer questions the user may have. Do not ask for contact information at this stage. Don't continue asking questions to the user.\n If a question cannot be answered by the content of the Solar Guide, say that you are unsure and that the user should ask this question to one of our Technicians during a telephone or home appointment.\n Always refer to the conversation history. Do not repeat questions that have already been asked. No need to greet yourself if already done in the conversation. Clarity and Conciseness: Use bullet points or numbered lists for clarity in your responses, and keep responses concise, limited to 2-3 sentences."
+)
 
 # Dictionaries to track user state
 exchange_count = {}
@@ -392,8 +396,12 @@ async def chat(request: Request):
     exchange_count[user_id] += 1
 
     try:
-        if info_collected[user_id] or exchange_count[user_id] < 3:
+        if exchange_count[user_id] < 3:
             persona_prompt = initial_persona_prompt
+
+        elif info_collected[user_id]:
+            persona_prompt = faq
+            logger.info("FAQ")
         else:
             persona_prompt = salesman_persona_prompt
 
@@ -404,7 +412,7 @@ async def chat(request: Request):
         question_with_context = f"{persona_prompt}\n\nContext:\n{context_text}\n\nQuestion: {input_text}"
 
         conversation_response = conversation_chain.run(question_with_context)
-        logger.info(f"LLM response for conversation: {conversation_response}")
+        #logger.info(f"LLM response for conversation: {conversation_response}")
         # Manually save the context in the memory
         conversation_memory.save_context({"input": input_text}, {"output": conversation_response})
 
@@ -435,9 +443,7 @@ async def chat(request: Request):
                 }
 
                 if detect:
-                    logger.info(
-                        f"All required information collected for user {user_id}: {user_data[user_id]}"
-                    )
+                    #logger.info(   f"All required information collected for user {user_id}: {user_data[user_id]}")
 
                     if send_to_airtable(user_data[user_id]["fullname"],
                                         user_data[user_id]["email"],
@@ -446,8 +452,7 @@ async def chat(request: Request):
 
                         info_collected[user_id] = True
                         return {
-                            "answer":
-                            "Merci beaucoup de votre participation ! L'un de nos conseillers prendra contact avec vous rapidement."
+                            "answer": {conversation_response}
                         }
                     else:
                         logger.error(
