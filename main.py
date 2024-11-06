@@ -12,7 +12,7 @@ from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
 import asyncio
 import logging
-from textblob import TextBlob  # Import for sentiment analysis
+from textblob import TextBlob
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from langchain.chains.conversation.memory import ConversationBufferMemory
@@ -21,6 +21,7 @@ from twilio.twiml.voice_response import VoiceResponse
 from pydantic import BaseModel
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
+#from cartesia import Cartesia
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -45,7 +46,7 @@ class TwilioRequest(BaseModel):
     RecordingUrl: str = None
     RecordingSid: str = None
 
-llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.7)
+llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.5)
 
 # Define retriever as a global variable
 retriever = None
@@ -81,17 +82,31 @@ def generate_voice_response(text: str) -> str:
     speech_file_path = os.path.join(os.path.dirname(__file__),
                                     "static/speech.mp3")
 
-    # Generate the TTS audio file
+    # client = Cartesia(api_key=os.environ.get("CARTESIA_API_KEY"))
+
+    # data = client.tts.bytes(
+    #     model_id="sonic-english",
+    #     transcript=text,
+    #     voice_id="829ccd10-f8b3-43cd-b8a0-4aeaa81f3b30",  
+    #     output_format={
+    #         "container": "mp3",
+    #         "encoding": "pcm_f32le",
+    #         "sample_rate": 44100,
+    #     },
+    # )
+
+    # with open(speech_file_path, "wb") as f:
+    #     f.write(data)
+        
+    #OpenAI
+    
     response = client.audio.speech.create(model="tts-1",
                                           voice="nova",
                                           input=text)
     response.stream_to_file(speech_file_path)
 
-    # Wait briefly to ensure the file is created
-    time.sleep(1)
-
-    # Return the URL of the dynamic endpoint
     audio_url = f"{os.getenv('BASE_URL', 'https://be9b7102-f7ca-4519-bba7-9a93be845fb9-00-qynkptyk0lr7.riker.replit.dev')}/get-audio"
+
     return audio_url
 
 
@@ -102,7 +117,6 @@ def transcribe_audio(audio_path: str) -> str:
     return transcription
 
 def download_recording_with_retry(recording_url, account_sid, auth_token, max_retries=5, delay=2):
-    """Attempts to download the recording with retries if it's not yet available."""
     for attempt in range(max_retries):
         response = requests.get(recording_url, auth=(account_sid, auth_token))
 
@@ -200,8 +214,8 @@ def send_to_google_sheet(fullname, email, phone, notes):
         return False
 
 
-DOCUMENT_PATH1 = "docs/Solar_guide.pdf"
-DOCUMENT_PATH2 = "docs/Tarifs_prime_autoconsommatio_V2.pdf"
+DOCUMENT_PATH1 = "docs/HR_internal.pdf"
+DOCUMENT_PATH2 = "docs/Trainee_template.pdf"
 HASH_FILE = "document_hash.txt"
 VECTOR_STORE_PATH = "faiss_vector_db"
 
@@ -250,20 +264,15 @@ def ingest_docs():
     vectorstore = FAISS.from_documents(documents=chunks, embedding=embeddings)
     vectorstore.save_local(VECTOR_STORE_PATH)
 
-    print("Document successfully ingested into knowledge base")
-
     return vectorstore  # Return the vectorstore to update retriever globally
 
 
 if document_changed():
-    print("Document changed. Ingesting new document...")
     conversation_memory.clear()
     conversation_memory = ConversationBufferMemory(return_messages=True)
-    print("Conversation memory cleared")
     vectorstore = ingest_docs()
     retriever = vectorstore.as_retriever()
 else:
-    print("Document unchanged. Loading existing vector store.")
     vectorstore = FAISS.load_local(VECTOR_STORE_PATH,
                                    OpenAIEmbeddings(),
                                    allow_dangerous_deserialization=True)
@@ -290,15 +299,6 @@ def read_root():
 
 initial_persona_prompt = (
     "You are a friendly representative of Kay Soley, knowledgeable about solar energy. Answer in the same language as the user. Your goal is to engage in a natural conversation, and answer based on the Solar Guide any questions the user may have. Do not ask for contact information at this stage.\n If a question cannot be answered by the content of the Solar Guide, say that you are unsure and that the user should ask this question to one of our Technicians during a telephone or home appointment.\n At the end of each answer, ask them open-ended questions to learn more about their project. Always refer to the conversation history. Do not repeat questions that have already been asked. No need to greet yourself if already done in the conversation. Clarity and Conciseness: Use bullet points or numbered lists for clarity in your responses, and keep responses concise, limited to 2-3 sentences."
-    "*Understanding the User's Profile* but don't ask all these questions at once:"
-    "- Ask which commune they live in."
-    "- Inquire about their electricity bill amount and whether it's monthly or bi-monthly."
-    "Try to understand their consumption habits:"
-    "- Is the house typically occupied during the day or mainly in the evening?"
-    "- How many people live in the household?"
-    "- Are there air conditioning units? If so, how many?"
-    "- Is there a swimming pool or an electric vehicle?"
-    " If the user is not located in Martinique. Tell him that for the moment we are only present in Martinique. We will be able to provide you with the best service in the future."
 )
 
 salesman_persona_prompt = (
@@ -344,7 +344,7 @@ def analyze_input_for_information(input_text, conversation_history, user_id):
     Full Name: <extracted full name if any>
     Email: <extracted email address if any>
     Phone: <extracted phone number if any>
-    Notes: <Brief summary in french of the user's questions and profile based on the entire conversation>
+    Notes: <Brief summary of the user's questions and profile based on the entire conversation>
     """
     verification_result = llm.invoke(verification_prompt)
 
@@ -430,9 +430,9 @@ async def startup_event():
 
 @app.post("/incoming-call")
 async def incoming_call(request: Request):
-    form_data = await request.form()
-    twilio_request = TwilioRequest(**form_data)
-    session_id = twilio_request.CallSid
+    #form_data = await request.form()
+    #twilio_request = TwilioRequest(**form_data)
+    #session_id = twilio_request.CallSid
 
     # Set the audio URL to the pre-recorded welcome message
     audio_url = f"{os.getenv('BASE_URL', 'https://be9b7102-f7ca-4519-bba7-9a93be845fb9-00-qynkptyk0lr7.riker.replit.dev')}/play-welcome-audio"
@@ -447,7 +447,7 @@ async def incoming_call(request: Request):
         "/process_recording",  # Send to process_recording to handle the input
         method="POST",
         max_length=60,
-        timeout=3,  # Ends recording after 3 seconds of silence
+        timeout=1,  # Ends recording after n seconds of silence
         finish_on_key="#"  # Optional: Allows caller to end input with "#"
     )
 
@@ -460,9 +460,7 @@ async def incoming_call(request: Request):
 async def process_recording(request: Request):
     try:
         form_data = await request.form()
-        logger.info(f"Received form data: {form_data}")
 
-        # Extract the recording URL and session ID
         recording_url = form_data.get("RecordingUrl")
         session_id = form_data.get("CallSid")
 
@@ -510,12 +508,19 @@ async def process_recording(request: Request):
 
         # Initialize session-specific data if not present
         if session_id not in conversation_memory_dict:
+            
             conversation_memory_dict[session_id] = ConversationBufferMemory()
             logger.info(
                 f"New conversation memory initialized for session {session_id}"
             )
 
         conversation_memory = conversation_memory_dict[session_id]
+        
+        # Initialize the Conversation Chain with memory
+        conversation_chain = ConversationChain(
+            llm=llm,
+            memory=conversation_memory,
+        )
 
         # Set up user-specific data
         user_id = session_id
@@ -553,6 +558,8 @@ async def process_recording(request: Request):
         conversation_memory.save_context({"input": input_text},
                                          {"output": conversation_response})
 
+        logger.info(f"Conversation response: {conversation_response}")
+        
         # Analyze input to collect user information if in salesman persona mode
         if persona_prompt == salesman_persona_prompt:
             conversation_history = conversation_memory.buffer

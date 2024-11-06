@@ -6,6 +6,7 @@ pkgs.mkShell {
     pkgs.python310
     pkgs.python310Packages.requests
     pkgs.python310Packages.uvicorn
+    pkgs.python310Packages.cartesia
     (pkgs.python310Packages.buildPythonPackage rec {
       pname = "textblob";
       version = "0.15.3";
